@@ -8,13 +8,15 @@ const STATES = { MENU: 1, PLAY: 2, GAMEOVER: 3 };
 const scene = document.getElementById("scene");
 const brush = getBrush();
 
-let currentState = STATES.MENU; // start in menu
+let currentState = STATES.IDLE;
+
+let score = 0;
+let highScore = 0;
 
 // ------
 
 const MENU = {
   currentIndex: 0,
-  showingHighScore: false,
   buttons: [
     { text: "Play", action: startPlay },
     { text: "High Scores", action: showHigScores },
@@ -37,52 +39,35 @@ const ship = {
 
 const projectileWidth = 3;
 const projectileHeight = 5;
-const projectileSpeed = 4;
-const projectileCooldown = 14;
+const projectileSpeed = 2;
+const projectileCooldown = 40;
 let cooldown = 0;
 let projectiles = [];
 
-// ------ NPC / Invaders -----------------------------------------------------------
+// ------
+
 const NPC = {
-  width: 40,
-  height: 18,
-  padding: 14,
-  sx: 40,
-  sy: 40,
-  speed: 0.8,
+  width: 50,
+  height: 20,
+  padding: 20,
+  sx: 50,
+  sy: 20,
+  speed: 1,
   direction: 1,
   entities: [],
 };
 
-let npcPerRow = Math.floor((scene.width - NPC.sx) / (NPC.width + NPC.padding));
+const npcPerRow = Math.floor(
+  (scene.width - NPC.height) / (NPC.width + NPC.height)
+);
 
-// rows
-let npcRows = 4; // requirement: at least 4 rows
-let rowColors = ["red", "orange", "yellow", "green", "cyan", "magenta"];
+// ------
 
-// Movment back and forth of NPC´s are governed by counting steps
-const maxMovmentSteps = 120;
-let movmentSteps = 0;
+// Movment back and forth of NPC´s are governed by counting up to a level
+const maxMovmentSteps = 50;
+let movmentSteps = maxMovmentSteps;
 
-// waves, scoring, highscores
-let waveNumber = 0;
-let score = 0;
-let highScore = Number(localStorage.getItem("space_invaders_highscore") || 0);
-
-// UFO bonus
-let ufo = {
-  active: false,
-  x: -100,
-  y: 20,
-  width: 46,
-  height: 14,
-  speed: 2,
-  dir: 1,
-};
-let ufoSpawnTimer = 0; // counts frames until possible spawn
-let ufoSpawnIntervalMin = 4 * 60; // 4 seconds
-let ufoSpawnIntervalMax = 12 * 60; // 12 seconds
-
+// ------
 // The following is a simple way of
 let controllKeys = {
   ArrowDown: false,
@@ -92,12 +77,18 @@ let controllKeys = {
   " ": false, // space
 };
 
+let keyConsumed = {};
+
 window.addEventListener("keydown", function (e) {
-  controllKeys[e.key] = true;
+  if (!controllKeys[e.key]) {
+    controllKeys[e.key] = true;
+    keyConsumed[e.key] = false;
+  }
 });
 
 window.addEventListener("keyup", function (e) {
   controllKeys[e.key] = false;
+  keyConsumed[e.key] = false;
 });
 
 //#endregion
@@ -105,11 +96,33 @@ window.addEventListener("keyup", function (e) {
 //#region Game engine ----------------------------------------------------------------
 
 function init() {
-  // seed first wave
-  resetForNewWave();
-
+  NPC.speed = 1;
   currentState = STATES.MENU;
   update();
+}
+
+function buildNewWave() {
+  NPC.entities = [];
+  const rowColors = ["Purple", "Red", "Cyan", "Yellow"];
+
+  let y = NPC.sy;
+
+  for (let row = 0; row < 4; row++) {
+    let x = NPC.sx;
+    for (let i = 0; i < npcPerRow; i++) {
+      NPC.entities.push({
+        x,
+        y,
+        color: rowColors[row],
+        active: true,
+        width: NPC.width,
+        height: NPC.height,
+        rowIndex: row,
+      });
+      x += NPC.width + NPC.padding;
+    }
+    y += NPC.height + 20;
+  }
 }
 
 function update(time) {
@@ -118,11 +131,7 @@ function update(time) {
   } else if (currentState === STATES.PLAY) {
     updateGame(time);
   } else if (currentState === STATES.GAMEOVER) {
-    // show score for a short while then return to menu - but per instructions we return to menu after display
-    // we'll allow player to press space to return to menu
-    if (controllKeys[" "]) {
-      currentState = STATES.MENU;
-    }
+    updateGameOver(time);
   }
 
   draw();
@@ -148,23 +157,15 @@ init(); // Starts the game
 //#region Game functions
 
 function updateMenu(dt) {
-  if (controllKeys[" "]) {
-    // if showing highscores, space returns to normal menu
-    if (MENU.showingHighScore) {
-      MENU.showingHighScore = false;
-    } else {
-      MENU.buttons[MENU.currentIndex].action();
-    }
-    // prevent repeated immediate triggers
-    controllKeys[" "] = false;
+  if (controllKeys[" "] && !keyConsumed[" "]) {
+    MENU.buttons[MENU.currentIndex].action();
+    keyConsumed[" "] = true;
   }
 
   if (controllKeys.ArrowUp) {
     MENU.currentIndex--;
-    controllKeys.ArrowUp = false;
   } else if (controllKeys.ArrowDown) {
     MENU.currentIndex++;
-    controllKeys.ArrowDown = false;
   }
 
   MENU.currentIndex = clamp(MENU.currentIndex, 0, MENU.buttons.length - 1);
@@ -172,25 +173,15 @@ function updateMenu(dt) {
 
 function drawMenu() {
   let sy = 100;
-  brush.font = "30px serif";
-  brush.fillStyle = "#000";
-  brush.fillText("SPACE - INVADERS (variation)", 60, 60);
-
   for (let i = 0; i < MENU.buttons.length; i++) {
     let text = MENU.buttons[i].text;
     if (i == MENU.currentIndex) {
       text = `* ${text} *`;
     }
 
-    brush.font = "36px serif";
+    brush.font = "50px serif";
     brush.fillText(text, 100, sy);
     sy += 50;
-  }
-
-  if (MENU.showingHighScore) {
-    brush.font = "28px serif";
-    brush.fillText(`High score: ${highScore}`, 100, sy + 30);
-    brush.fillText("Press SPACE to return", 100, sy + 70);
   }
 }
 
@@ -198,103 +189,61 @@ function updateGame(dt) {
   updateShip();
   updateProjectiles();
   updateInvaders();
-  updateUFO();
-
-  // Check for game over: any invader reaches defender level
-  if (checkInvaderReachedDefender()) {
-    // game over: show final score and highscore and return to menu when player presses space
-    if (score > highScore) {
-      highScore = score;
-      localStorage.setItem("space_invaders_highscore", String(highScore));
-    }
+  if (isGameOver()) {
     currentState = STATES.GAMEOVER;
   }
 }
 
-function resetForNewWave() {
-  NPC.entities = [];
-  npcPerRow = Math.floor((scene.width - NPC.sx) / (NPC.width + NPC.padding));
-
-  let startX = NPC.sx;
-  let y = NPC.sy;
-  // create multiple rows
-  for (let r = 0; r < npcRows; r++) {
-    let x = startX;
-    for (let i = 0; i < npcPerRow; i++) {
-      let color = rowColors[r % rowColors.length];
-      NPC.entities.push({
-        x,
-        y,
-        color,
-        active: true,
-        width: NPC.width,
-        height: NPC.height,
-        row: r,
-      });
-      x += NPC.width + NPC.padding;
-    }
-    y += NPC.height + 12; // vertical spacing between rows
-  }
-
-  // reset movement and speed tweaks
-  movmentSteps = 0;
-  NPC.direction = 1;
-  NPC.speed = 0.8 + waveNumber * 0.12;
-
-  // reset ship position
-  ship.x = scene.width * 0.5 - ship.width * 0.5;
-  ship.velocityX = 0;
-
-  // reset projectiles
-  projectiles = [];
-
-  // reset UFO timer
-  ufo.active = false;
-  ufoSpawnTimer = randRange(ufoSpawnIntervalMin, ufoSpawnIntervalMax);
-}
-
 function updateInvaders() {
-  // movement: move horizontally, when steps exceed threshold reverse and move down
-  movmentSteps++;
-  let tx = NPC.speed * NPC.direction;
   let ty = 0;
 
-  if (movmentSteps >= maxMovmentSteps) {
+  if (movmentSteps >= maxMovmentSteps * 2) {
     movmentSteps = 0;
     NPC.direction *= -1;
-    ty = NPC.height; // move down one row-height when reversing
+    ty = NPC.height;
   }
+
+  let tx = NPC.speed * NPC.direction;
 
   for (let invader of NPC.entities) {
     if (!invader.active) continue;
-    invader.x += tx;
-    invader.y += ty;
-    // keep them inside horizontal bounds; simple approach: if any invader hits edge, reverse next frame
-    if (invader.x < 0) invader.x = 0;
-    if (invader.x + invader.width > scene.width)
-      invader.x = scene.width - invader.width;
 
-    // shot detection
-    if (isShot(invader)) {
-      invader.active = false;
-      // award points depending on row - higher rows give more
-      let points = 10 + (npcRows - 1 - invader.row) * 5;
-      score += points;
+    let nextX = invader.x + tx;
+    if (nextX < 0 || nextX + NPC.width > scene.width) {
+      movmentSteps = maxMovmentSteps * 2;
+      return;
     }
   }
 
-  // if all invaders dead -> spawn next wave
-  if (NPC.entities.every((e) => !e.active)) {
-    waveNumber++;
-    resetForNewWave();
+  for (let invader of NPC.entities) {
+    if (invader.active) {
+      invader.x += tx;
+      invader.y += ty;
+
+      if (isShot(invader)) {
+        invader.active = false;
+      }
+    }
+  }
+
+  movmentSteps++;
+}
+
+function updateGameOver(dt) {
+  if (score > highScore) highScore = score;
+
+  if (controllKeys[" "] && !keyConsumed[" "]) {
+    currentState = STATES.MENU;
+    keyConsumed[" "] = true;
   }
 }
 
-function checkInvaderReachedDefender() {
+function isGameOver() {
   for (let invader of NPC.entities) {
-    if (!invader.active) continue;
-    if (invader.y + invader.height >= ship.y) {
-      return true;
+    if (invader.active) {
+      if (invader.y + invader.height >= ship.y) {
+        return true;
+      }
     }
   }
   return false;
@@ -303,39 +252,23 @@ function checkInvaderReachedDefender() {
 function isShot(target) {
   for (let i = 0; i < projectiles.length; i++) {
     let projectile = projectiles[i];
-    if (!projectile.active) continue;
     if (
       overlaps(
         target.x,
         target.y,
         target.width,
         target.height,
-        projectile.x - projectileWidth / 2,
+        projectile.x,
         projectile.y,
         projectile.width,
         projectile.height
       )
     ) {
       projectile.active = false;
+      const rowScore = [40, 30, 20, 10];
+      score += rowScore[target.rowIndex];
       return true;
     }
-  }
-
-  // check UFO too
-  if (
-    ufo.active &&
-    overlaps(
-      target.x,
-      target.y,
-      target.width,
-      target.height,
-      ufo.x,
-      ufo.y,
-      ufo.width,
-      ufo.height
-    )
-  ) {
-    // allow invader to be killed by UFO collision? uncommon - ignore
   }
 
   return false;
@@ -343,14 +276,16 @@ function isShot(target) {
 
 function updateShip() {
   if (controllKeys.ArrowLeft) {
-    ship.velocityX = Math.max(ship.velocityX - 0.2, -ship.maxVelocity);
+    ship.velocityX--;
   } else if (controllKeys.ArrowRight) {
-    ship.velocityX = Math.min(ship.velocityX + 0.2, ship.maxVelocity);
-  } else {
-    // friction
-    ship.velocityX *= 0.9;
-    if (Math.abs(ship.velocityX) < 0.01) ship.velocityX = 0;
+    ship.velocityX++;
   }
+
+  ship.velocityX = clamp(
+    ship.velocityX,
+    ship.maxVelocity * -1,
+    ship.maxVelocity
+  );
 
   let tmpX = ship.x + ship.velocityX;
   tmpX = clamp(tmpX, 0, scene.width - ship.width);
@@ -361,16 +296,14 @@ function updateShip() {
 
   if (controllKeys[" "] && cooldown <= 0) {
     projectiles.push({
-      x: ship.x + ship.width * 0.5 - projectileWidth / 2,
-      y: ship.y - projectileHeight,
+      x: ship.x + ship.width * 0.5,
+      y: ship.y,
       dir: -1,
       active: true,
       width: projectileWidth,
       height: projectileHeight,
     });
     cooldown = projectileCooldown;
-    // prevent holding space from spamming immediate multiple shots (space must be released)
-    controllKeys[" "] = false;
   }
 }
 
@@ -379,73 +312,28 @@ function updateProjectiles() {
   for (let i = 0; i < projectiles.length; i++) {
     let projectile = projectiles[i];
     projectile.y += projectileSpeed * projectile.dir;
-    if (projectile.y + projectile.height > 0 && projectile.active) {
+    if (projectile.y + projectileHeight > 0 && projectile.active) {
       activeProjectiles.push(projectile);
     }
   }
   projectiles = activeProjectiles;
-
-  // also check projectiles hitting UFO
-  for (let p of projectiles) {
-    if (!p.active) continue;
-    if (
-      ufo.active &&
-      overlaps(ufo.x, ufo.y, ufo.width, ufo.height, p.x, p.y, p.width, p.height)
-    ) {
-      p.active = false;
-      // big bonus
-      score += 200;
-      ufo.active = false;
-    }
-  }
-}
-
-function updateUFO() {
-  // spawn timer
-  if (!ufo.active) {
-    ufoSpawnTimer--;
-    if (ufoSpawnTimer <= 0) {
-      ufo.active = true;
-      // start from left or right randomly
-      if (Math.random() < 0.5) {
-        ufo.x = -ufo.width;
-        ufo.dir = 1;
-      } else {
-        ufo.x = scene.width + ufo.width;
-        ufo.dir = -1;
-      }
-      ufo.y = 14;
-      ufo.speed = 1.8 + waveNumber * 0.12;
-    }
-  } else {
-    ufo.x += ufo.speed * ufo.dir;
-    // if off screen -> deactivate and reset timer
-    if (ufo.x < -ufo.width - 10 || ufo.x > scene.width + ufo.width + 10) {
-      ufo.active = false;
-      ufoSpawnTimer = randRange(ufoSpawnIntervalMin, ufoSpawnIntervalMax);
-    }
-  }
 }
 
 function drawGameState() {
-  // draw ship
   brush.fillStyle = "Black";
   brush.fillRect(ship.x, ship.y, ship.width, ship.height);
 
-  // draw projectiles
-  brush.fillStyle = "Black";
   for (let projectile of projectiles) {
     if (projectile.active) {
       brush.fillRect(
         projectile.x,
         projectile.y,
-        projectile.width,
-        projectile.height
+        projectileWidth,
+        projectileHeight
       );
     }
   }
 
-  // draw invaders
   for (let invader of NPC.entities) {
     if (invader.active) {
       brush.fillStyle = invader.color;
@@ -453,45 +341,39 @@ function drawGameState() {
     }
   }
 
-  // draw UFO
-  if (ufo.active) {
-    brush.fillStyle = "purple";
-    brush.fillRect(ufo.x, ufo.y, ufo.width, ufo.height);
-  }
-
-  // draw HUD: score and wave
-  brush.fillStyle = "black";
-  brush.font = "18px serif";
-  brush.fillText(`Score: ${score}`, 10, 20);
-  brush.fillText(`High: ${highScore}`, 110, 20);
-  brush.fillText(`Wave: ${waveNumber + 1}`, 220, 20);
+  brush.fillStyle = "white";
+  brush.font = "20px Arial";
+  brush.fillText("Score: " + score, 10, 20);
 }
 
 function drawGameOver() {
-  brush.font = "40px serif";
-  brush.fillStyle = "black";
-  brush.fillText("GAME OVER", 100, 120);
+  clearScreen();
 
-  brush.font = "24px serif";
-  brush.fillText(`Final score: ${score}`, 100, 160);
-  brush.fillText(`High score: ${highScore}`, 100, 200);
+  brush.fillStyle = "white";
+  brush.font = "40px Arial";
+  brush.fillText("GAME OVER", 100, 100);
 
-  brush.font = "18px serif";
-  brush.fillText("Press SPACE to return to menu", 100, 240);
+  brush.font = "25px Arial";
+  brush.fillText("Score: " + score, 100, 150);
+  brush.fillText("High Score: " + highScore, 100, 190);
+
+  brush.font = "20px Arial";
+  brush.fillText("Press SPACE to return to menu", 100, 250);
 }
 
 function startPlay() {
-  // reset score and wave
-  score = 0;
-  waveNumber = 0;
-  resetForNewWave();
   currentState = STATES.PLAY;
+  score = 0;
+  keyConsumed[" "] = false;
+  ship.x = scene.width * 0.5 - ship.width * 0.5;
+  ship.velocityX = 0;
+  projectiles = [];
+  buildNewWave();
+  movmentSteps = 0;
+  NPC.direction = 1;
 }
 
-function showHigScores() {
-  // toggle the menu flag to show high score overlay
-  MENU.showingHighScore = true;
-}
+function showHigScores() {}
 
 //#endregion
 
@@ -522,9 +404,4 @@ function overlaps(x1, y1, w1, h1, x2, y2, w2, h2) {
 
   return true;
 }
-
-function randRange(min, max) {
-  return Math.floor(Math.random() * (max - min + 1)) + min;
-}
-
 //#endregion

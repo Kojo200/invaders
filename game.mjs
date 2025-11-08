@@ -37,7 +37,7 @@ const ship = {
 
 // ------
 
-const projectileWidth = 3;
+const projectieWidth = 3;
 const projectileHeight = 5;
 const projectileSpeed = 2;
 const projectileCooldown = 40;
@@ -54,8 +54,20 @@ const NPC = {
   sy: 20,
   speed: 1,
   direction: 1,
-  entities: [],
+  enteties: [],
 };
+
+const UFO = {
+  x: 0,
+  y: 5,
+  width: 60,
+  height: 20,
+  active: false,
+  speed: 2,
+  bonus: 200,
+};
+
+let ufoSpawnTimer = 0;
 
 const npcPerRow = Math.floor(
   (scene.width - NPC.height) / (NPC.width + NPC.height)
@@ -63,7 +75,7 @@ const npcPerRow = Math.floor(
 
 // ------
 
-// Movment back and forth of NPC´s are governed by counting up to a level
+// Movment back and forth of NPC´s are govered by counting up to a level
 const maxMovmentSteps = 50;
 let movmentSteps = maxMovmentSteps;
 
@@ -102,7 +114,7 @@ function init() {
 }
 
 function buildNewWave() {
-  NPC.entities = [];
+  NPC.enteties = [];
   const rowColors = ["Purple", "Red", "Cyan", "Yellow"];
 
   let y = NPC.sy;
@@ -110,7 +122,7 @@ function buildNewWave() {
   for (let row = 0; row < 4; row++) {
     let x = NPC.sx;
     for (let i = 0; i < npcPerRow; i++) {
-      NPC.entities.push({
+      NPC.enteties.push({
         x,
         y,
         color: rowColors[row],
@@ -186,11 +198,16 @@ function drawMenu() {
 }
 
 function updateGame(dt) {
-  keyConsumed[" "] = true;
   updateShip();
   updateProjectiles();
   updateInvaders();
+  if (NPC.enteties.every((inv) => !inv.active)) {
+    buildNewWave();
+    ship.x = scene.width * 0.5 - ship.width * 0.5;
+    ship.velocityX = 0;
+  }
   if (isGameOver()) {
+    keyConsumed[" "] = true;
     currentState = STATES.GAMEOVER;
   }
 }
@@ -206,7 +223,7 @@ function updateInvaders() {
 
   let tx = NPC.speed * NPC.direction;
 
-  for (let invader of NPC.entities) {
+  for (let invader of NPC.enteties) {
     if (!invader.active) continue;
 
     let nextX = invader.x + tx;
@@ -216,7 +233,7 @@ function updateInvaders() {
     }
   }
 
-  for (let invader of NPC.entities) {
+  for (let invader of NPC.enteties) {
     if (invader.active) {
       invader.x += tx;
       invader.y += ty;
@@ -240,7 +257,7 @@ function updateGameOver(dt) {
 }
 
 function isGameOver() {
-  for (let invader of NPC.entities) {
+  for (let invader of NPC.enteties) {
     if (invader.active) {
       if (invader.y + invader.height >= ship.y) {
         return true;
@@ -296,7 +313,7 @@ function updateShip() {
       y: ship.y,
       dir: -1,
       active: true,
-      width: projectileWidth,
+      width: projectieWidth,
       height: projectileHeight,
     });
     cooldown = projectileCooldown;
@@ -324,13 +341,13 @@ function drawGameState() {
       brush.fillRect(
         projectile.x,
         projectile.y,
-        projectileWidth,
+        projectieWidth,
         projectileHeight
       );
     }
   }
 
-  for (let invader of NPC.entities) {
+  for (let invader of NPC.enteties) {
     if (invader.active) {
       brush.fillStyle = invader.color;
       brush.fillRect(invader.x, invader.y, NPC.width, NPC.height);

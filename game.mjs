@@ -186,6 +186,7 @@ function drawMenu() {
 }
 
 function updateGame(dt) {
+  keyConsumed[" "] = true;
   updateShip();
   updateProjectiles();
   updateInvaders();
@@ -276,20 +277,15 @@ function isShot(target) {
 
 function updateShip() {
   if (controllKeys.ArrowLeft) {
-    ship.velocityX--;
+    ship.velocityX = -ship.maxVelocity;
   } else if (controllKeys.ArrowRight) {
-    ship.velocityX++;
+    ship.velocityX = ship.maxVelocity;
+  } else {
+    ship.velocityX = 0;
   }
-
-  ship.velocityX = clamp(
-    ship.velocityX,
-    ship.maxVelocity * -1,
-    ship.maxVelocity
-  );
 
   let tmpX = ship.x + ship.velocityX;
   tmpX = clamp(tmpX, 0, scene.width - ship.width);
-
   ship.x = tmpX;
 
   cooldown--;

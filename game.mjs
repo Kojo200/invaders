@@ -190,7 +190,7 @@ function drawMenu() {
     if (i == MENU.currentIndex) {
       text = `* ${text} *`;
     }
-
+    brush.fillStyle = "black";
     brush.font = "50px serif";
     brush.fillText(text, 100, sy);
     sy += 50;
@@ -201,6 +201,7 @@ function updateGame(dt) {
   updateShip();
   updateProjectiles();
   updateInvaders();
+  updateUFO();
   if (NPC.enteties.every((inv) => !inv.active)) {
     buildNewWave();
     ship.x = scene.width * 0.5 - ship.width * 0.5;
@@ -247,6 +248,29 @@ function updateInvaders() {
   movmentSteps++;
 }
 
+function updateUFO() {
+  if (!UFO.active) {
+    ufoSpawnTimer--;
+    if (ufoSpawnTimer <= 0) {
+      UFO.active = true;
+      UFO.x = -UFO.width;
+      ufoSpawnTimer = Math.floor(300 + Math.random() * 600);
+    }
+    return;
+  }
+
+  UFO.x += UFO.speed;
+
+  if (isShot(UFO)) {
+    UFO.active = false;
+    score += UFO.bonus;
+  }
+
+  if (UFO.x > scene.width) {
+    UFO.active = false;
+  }
+}
+
 function updateGameOver(dt) {
   if (score > highScore) highScore = score;
 
@@ -283,8 +307,14 @@ function isShot(target) {
       )
     ) {
       projectile.active = false;
-      const rowScore = [40, 30, 20, 10];
-      score += rowScore[target.rowIndex];
+
+      if (target.rowIndex !== undefined) {
+        const rowScore = [40, 30, 20, 10];
+        score += rowScore[target.rowIndex];
+      } else {
+        score += UFO.bonus;
+      }
+
       return true;
     }
   }
@@ -354,7 +384,12 @@ function drawGameState() {
     }
   }
 
-  brush.fillStyle = "white";
+  if (UFO.active) {
+    brush.fillStyle = "gray";
+    brush.fillRect(UFO.x, UFO.y, UFO.width, UFO.height);
+  }
+
+  brush.fillStyle = "black";
   brush.font = "20px Arial";
   brush.fillText("Score: " + score, 10, 20);
 }
@@ -362,7 +397,7 @@ function drawGameState() {
 function drawGameOver() {
   clearScreen();
 
-  brush.fillStyle = "white";
+  brush.fillStyle = "black";
   brush.font = "40px Arial";
   brush.fillText("GAME OVER", 100, 100);
 
@@ -384,6 +419,9 @@ function startPlay() {
   buildNewWave();
   movmentSteps = 0;
   NPC.direction = 1;
+  UFO.active = false;
+  UFO.x = -UFO.width;
+  ufoSpawnTimer = 0;
 }
 
 function showHigScores() {}

@@ -12,6 +12,8 @@ let currentState = STATES.IDLE;
 
 let score = 0;
 let highScore = 0;
+let showingHighScore = false;
+let wave = 1;
 
 // ------
 
@@ -169,6 +171,14 @@ init(); // Starts the game
 //#region Game functions
 
 function updateMenu(dt) {
+  if (showingHighScore) {
+    if (controllKeys[" "] && !keyConsumed[" "]) {
+      showingHighScore = false;
+      keyConsumed[" "] = true;
+    }
+    return;
+  }
+
   if (controllKeys[" "] && !keyConsumed[" "]) {
     MENU.buttons[MENU.currentIndex].action();
     keyConsumed[" "] = true;
@@ -184,7 +194,23 @@ function updateMenu(dt) {
 }
 
 function drawMenu() {
+  clearScreen();
   let sy = 100;
+
+  if (showingHighScore) {
+    brush.fillStyle = "black";
+    brush.font = "40px Arial";
+    brush.fillText("HIGH SCORE", 100, 100);
+
+    brush.font = "30px Arial";
+    brush.fillText("Best: " + highScore, 100, 150);
+
+    brush.font = "20px Arial";
+    brush.fillText("Press SPACE to return", 100, 250);
+
+    return;
+  }
+
   for (let i = 0; i < MENU.buttons.length; i++) {
     let text = MENU.buttons[i].text;
     if (i == MENU.currentIndex) {
@@ -194,6 +220,10 @@ function drawMenu() {
     brush.font = "50px serif";
     brush.fillText(text, 100, sy);
     sy += 50;
+
+    brush.fillStyle = "black";
+    brush.font = "50px Arial";
+    brush.fillText("SPACE INVADERS - SE", 50, 50);
   }
 }
 
@@ -204,6 +234,7 @@ function updateGame(dt) {
   updateUFO();
   if (NPC.enteties.every((inv) => !inv.active)) {
     buildNewWave();
+    wave++;
     ship.x = scene.width * 0.5 - ship.width * 0.5;
     ship.velocityX = 0;
   }
@@ -392,6 +423,7 @@ function drawGameState() {
   brush.fillStyle = "black";
   brush.font = "20px Arial";
   brush.fillText("Score: " + score, 10, 20);
+  brush.fillText("Wave: " + wave, 560, 20);
 }
 
 function drawGameOver() {
@@ -404,14 +436,16 @@ function drawGameOver() {
   brush.font = "25px Arial";
   brush.fillText("Score: " + score, 100, 150);
   brush.fillText("High Score: " + highScore, 100, 190);
+  brush.fillText("Wave reached: " + wave, 100, 230);
 
   brush.font = "20px Arial";
-  brush.fillText("Press SPACE to return to menu", 100, 250);
+  brush.fillText("Press SPACE to return to menu", 100, 280);
 }
 
 function startPlay() {
   currentState = STATES.PLAY;
   score = 0;
+  wave = 1;
   keyConsumed[" "] = false;
   ship.x = scene.width * 0.5 - ship.width * 0.5;
   ship.velocityX = 0;
@@ -424,7 +458,9 @@ function startPlay() {
   ufoSpawnTimer = 0;
 }
 
-function showHigScores() {}
+function showHigScores() {
+  showingHighScore = true;
+}
 
 //#endregion
 

@@ -39,11 +39,11 @@ const ship = {
 
 // ------
 
-const projectieWidth = 3;
+const projectileWidth = 3;
 const projectileHeight = 5;
 const projectileSpeed = 2;
-const projectileCooldown = 40;
-let cooldown = 0;
+const projectileCoolDown = 40;
+let coolDown = 0;
 let projectiles = [];
 
 // ------
@@ -56,8 +56,10 @@ const NPC = {
   sy: 20,
   speed: 1,
   direction: 1,
-  enteties: [],
+  entities: [],
 };
+
+let waveStaging = false;
 
 const UFO = {
   x: 0,
@@ -77,13 +79,13 @@ const npcPerRow = Math.floor(
 
 // ------
 
-// Movment back and forth of NPC´s are govered by counting up to a level
-const maxMovmentSteps = 50;
-let movmentSteps = maxMovmentSteps;
+// Movement back and forth of NPC´s are governed by counting up to a level
+const maxMovementSteps = 50;
+let movementSteps = maxMovementSteps;
 
 // ------
 // The following is a simple way of
-let controllKeys = {
+let controlKeys = {
   ArrowDown: false,
   ArrowUp: false,
   ArrowLeft: false,
@@ -94,14 +96,14 @@ let controllKeys = {
 let keyConsumed = {};
 
 window.addEventListener("keydown", function (e) {
-  if (!controllKeys[e.key]) {
-    controllKeys[e.key] = true;
+  if (!controlKeys[e.key]) {
+    controlKeys[e.key] = true;
     keyConsumed[e.key] = false;
   }
 });
 
 window.addEventListener("keyup", function (e) {
-  controllKeys[e.key] = false;
+  controlKeys[e.key] = false;
   keyConsumed[e.key] = false;
 });
 
@@ -116,7 +118,7 @@ function init() {
 }
 
 function buildNewWave() {
-  NPC.enteties = [];
+  NPC.entities = [];
   const rowColors = ["Purple", "Red", "Cyan", "Yellow"];
 
   let y = NPC.sy;
@@ -124,7 +126,7 @@ function buildNewWave() {
   for (let row = 0; row < 4; row++) {
     let x = NPC.sx;
     for (let i = 0; i < npcPerRow; i++) {
-      NPC.enteties.push({
+      NPC.entities.push({
         x,
         y,
         color: rowColors[row],
@@ -137,6 +139,13 @@ function buildNewWave() {
     }
     y += NPC.height + 20;
   }
+
+  for (let inv of NPC.entities) {
+    inv.targetY = inv.y;
+    inv.y -= 150;
+  }
+
+  waveStaging = true;
 }
 
 function update(time) {
@@ -172,21 +181,21 @@ init(); // Starts the game
 
 function updateMenu(dt) {
   if (showingHighScore) {
-    if (controllKeys[" "] && !keyConsumed[" "]) {
+    if (controlKeys[" "] && !keyConsumed[" "]) {
       showingHighScore = false;
       keyConsumed[" "] = true;
     }
     return;
   }
 
-  if (controllKeys[" "] && !keyConsumed[" "]) {
+  if (controlKeys[" "] && !keyConsumed[" "]) {
     MENU.buttons[MENU.currentIndex].action();
     keyConsumed[" "] = true;
   }
 
-  if (controllKeys.ArrowUp) {
+  if (controlKeys.ArrowUp) {
     MENU.currentIndex--;
-  } else if (controllKeys.ArrowDown) {
+  } else if (controlKeys.ArrowDown) {
     MENU.currentIndex++;
   }
 
@@ -196,6 +205,10 @@ function updateMenu(dt) {
 function drawMenu() {
   clearScreen();
   let sy = 100;
+
+  brush.fillStyle = "black";
+  brush.font = "50px Arial";
+  brush.fillText("SPACE INVADERS - SE", 50, 50);
 
   if (showingHighScore) {
     brush.fillStyle = "black";
@@ -220,10 +233,6 @@ function drawMenu() {
     brush.font = "50px serif";
     brush.fillText(text, 100, sy);
     sy += 50;
-
-    brush.fillStyle = "black";
-    brush.font = "50px Arial";
-    brush.fillText("SPACE INVADERS - SE", 50, 50);
   }
 }
 
@@ -232,9 +241,10 @@ function updateGame(dt) {
   updateProjectiles();
   updateInvaders();
   updateUFO();
-  if (NPC.enteties.every((inv) => !inv.active)) {
+  if (NPC.entities.every((inv) => !inv.active)) {
     buildNewWave();
     wave++;
+    NPC.speed += 0.05;
     ship.x = scene.width * 0.5 - ship.width * 0.5;
     ship.velocityX = 0;
   }
@@ -247,25 +257,40 @@ function updateGame(dt) {
 function updateInvaders() {
   let ty = 0;
 
-  if (movmentSteps >= maxMovmentSteps * 2) {
-    movmentSteps = 0;
+  if (waveStaging) {
+    let allArrived = true;
+    for (let invader of NPC.entities) {
+      if (!invader.active) continue;
+      if (invader.y < invader.targetY) {
+        invader.y += 1.5;
+        allArrived = false;
+      } else {
+        invader.y = invader.targetY;
+      }
+    }
+    if (!allArrived) return;
+    waveStaging = false;
+  }
+
+  if (movementSteps >= maxMovementSteps * 2) {
+    movementSteps = 0;
     NPC.direction *= -1;
     ty = NPC.height;
   }
 
   let tx = NPC.speed * NPC.direction;
 
-  for (let invader of NPC.enteties) {
+  for (let invader of NPC.entities) {
     if (!invader.active) continue;
 
     let nextX = invader.x + tx;
     if (nextX < 0 || nextX + NPC.width > scene.width) {
-      movmentSteps = maxMovmentSteps * 2;
+      movementSteps = maxMovementSteps * 2;
       return;
     }
   }
 
-  for (let invader of NPC.enteties) {
+  for (let invader of NPC.entities) {
     if (invader.active) {
       invader.x += tx;
       invader.y += ty;
@@ -276,7 +301,7 @@ function updateInvaders() {
     }
   }
 
-  movmentSteps++;
+  movementSteps++;
 }
 
 function updateUFO() {
@@ -305,14 +330,14 @@ function updateUFO() {
 function updateGameOver(dt) {
   if (score > highScore) highScore = score;
 
-  if (controllKeys[" "] && !keyConsumed[" "]) {
+  if (controlKeys[" "] && !keyConsumed[" "]) {
     currentState = STATES.MENU;
     keyConsumed[" "] = true;
   }
 }
 
 function isGameOver() {
-  for (let invader of NPC.enteties) {
+  for (let invader of NPC.entities) {
     if (invader.active) {
       if (invader.y + invader.height >= ship.y) {
         return true;
@@ -354,9 +379,9 @@ function isShot(target) {
 }
 
 function updateShip() {
-  if (controllKeys.ArrowLeft) {
+  if (controlKeys.ArrowLeft) {
     ship.velocityX = -ship.maxVelocity;
-  } else if (controllKeys.ArrowRight) {
+  } else if (controlKeys.ArrowRight) {
     ship.velocityX = ship.maxVelocity;
   } else {
     ship.velocityX = 0;
@@ -366,18 +391,18 @@ function updateShip() {
   tmpX = clamp(tmpX, 0, scene.width - ship.width);
   ship.x = tmpX;
 
-  cooldown--;
+  coolDown--;
 
-  if (controllKeys[" "] && cooldown <= 0) {
+  if (controlKeys[" "] && coolDown <= 0) {
     projectiles.push({
       x: ship.x + ship.width * 0.5,
       y: ship.y,
       dir: -1,
       active: true,
-      width: projectieWidth,
+      width: projectileWidth,
       height: projectileHeight,
     });
-    cooldown = projectileCooldown;
+    coolDown = projectileCoolDown;
   }
 }
 
@@ -402,13 +427,13 @@ function drawGameState() {
       brush.fillRect(
         projectile.x,
         projectile.y,
-        projectieWidth,
+        projectileWidth,
         projectileHeight
       );
     }
   }
 
-  for (let invader of NPC.enteties) {
+  for (let invader of NPC.entities) {
     if (invader.active) {
       brush.fillStyle = invader.color;
       brush.fillRect(invader.x, invader.y, NPC.width, NPC.height);
@@ -423,7 +448,7 @@ function drawGameState() {
   brush.fillStyle = "black";
   brush.font = "20px Arial";
   brush.fillText("Score: " + score, 10, 20);
-  brush.fillText("Wave: " + wave, 560, 20);
+  brush.fillText("Wave: " + wave, 550, 20);
 }
 
 function drawGameOver() {
@@ -446,12 +471,14 @@ function startPlay() {
   currentState = STATES.PLAY;
   score = 0;
   wave = 1;
+  NPC.speed = 1;
+  waveStaging = false;
   keyConsumed[" "] = false;
   ship.x = scene.width * 0.5 - ship.width * 0.5;
   ship.velocityX = 0;
   projectiles = [];
   buildNewWave();
-  movmentSteps = 0;
+  movementSteps = 0;
   NPC.direction = 1;
   UFO.active = false;
   UFO.x = -UFO.width;
